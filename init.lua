@@ -23,7 +23,13 @@ local types = {
 }
 
 local formats = {
-    file = {},
+    file = {function (name, _full_path, _tick)
+        local s = ''
+        if string.sub(name, 1, 1) == '.' then
+            s = s .. set_color('888888')
+        end
+        return s .. '󰈔 ' .. name .. reset_col()
+    end,},
     dirs = {},
 }
 

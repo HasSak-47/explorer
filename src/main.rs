@@ -91,10 +91,12 @@ fn get_options<'a>() -> &'a Options{
     OPTIONS.get_or_init( Options::parse )
 }
 
-fn load_formats(_: &Lua, tb: mlua::Table) -> mlua::Result<()>{
+fn load_file_formats(_: &Lua, tb: mlua::Table) -> mlua::Result<()>{
     let mut map = MAP.lock().map_err(|err| mlua::Error::RuntimeError(err.to_string()) )?;
     let file_formats : Table = tb.get("file")?;
 
+    let default : Function = file_formats.get(1)?;
+    *map.get_mut(&FileType::GenericFile).unwrap() = default;
     for kv in file_formats.pairs(){
         let (k, v) : (String, Function) = kv?;
         map.insert(FileType::OtherFile(k), v);
@@ -107,7 +109,7 @@ fn init_lua() -> Result<()> {
     let lua = LUA.lock().map_err(|err| anyhow!(err.to_string()) )?;
     let path = &get_options().config;
 
-    let load_format_function = lua.create_function(load_formats)?;
+    let load_format_function = lua.create_function(load_file_formats)?;
     lua.globals().set("load_formats", load_format_function)?;
 
     let mut file = File::open(path)?;
