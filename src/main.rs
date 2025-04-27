@@ -1,11 +1,11 @@
 use std::{
-    collections::HashMap, env::{current_dir, home_dir}, fs::{read_dir, File}, io::Read, path::PathBuf, process::exit, sync::{LazyLock, Mutex},
+    collections::HashMap, env::{current_dir, home_dir}, fs::{read_dir, File}, io::Read, path::PathBuf, process::exit, sync::{LazyLock, Mutex, Once, OnceLock},
     thread,
 };
 
 use clap::Parser;
 use anyhow::{anyhow, Result};
-use mlua::Lua;
+use mlua::{Function, Lua, Table};
 
 #[derive(Debug, Default, Eq, PartialEq, PartialOrd, Hash, Clone)]
 enum FileType {
@@ -16,11 +16,15 @@ enum FileType {
     OtherFile(String),
 }
 
-static MAP : LazyLock<Mutex< HashMap<FileType, String>>> = LazyLock::new(||{ 
+static MAP : LazyLock<Mutex< HashMap<FileType, mlua::Function>>> = LazyLock::new(||{ 
     use FileType as FT;
+
+    let def_file: Function = LUA.lock().unwrap().load("function(name, path, tick) return '󰈔 ' .. name end").eval().unwrap();
+    let def_dir: Function = LUA.lock().unwrap().load("function(name, path, tick) return ' ' .. name end").eval().unwrap();
+
     return Mutex::new(HashMap::from([
-        (FT::GenericFile, "\u{f0214}".to_string()),
-        (FT::GenericDir,  "\u{f4d3}".to_string()),
+        (FT::GenericFile, def_file),
+        (FT::GenericDir, def_dir),
     ]));
 });
 
@@ -43,10 +47,17 @@ fn config_dir() -> PathBuf {
     return config_dir;
 }
 
-#[derive(Parser, Default)]
+#[derive(Parser, Default, Clone)]
+enum Mode{
+    #[default]
+    List,
+    Explorer,
+}
+
+#[derive(Parser, Default, Clone)]
 #[command(version, about, long_about = None)]
 struct Options {
-    #[arg(default_value = "config_dir")]
+    #[arg(long, short, default_value = "config_dir")]
     config: PathBuf,
 
     #[arg(long, short, default_value_t=false)]
@@ -54,56 +65,51 @@ struct Options {
 
     #[arg(long, short, default_value_t=false)]
     verbose: bool,
+
+    #[command(subcommand)]
+    mode: Mode,
+}
+
+static OPTIONS : OnceLock<Options> = OnceLock::new();
+
+fn _format_file(map: &HashMap<FileType, Function>, path: PathBuf) -> Option<&Function>{
+    let extension = path.extension()?.to_str()?.to_string();
+    let ft = FileType::OtherFile(extension.clone());
+
+    return map.get(&ft);
+}
+
+fn format_file(path: PathBuf) -> Function{
+    let map = MAP.lock().unwrap();
+    let format = _format_file(&map, path)
+        .unwrap_or(map.get(&FileType::GenericFile).unwrap());
+
+    return format.clone();
+}
+
+fn get_options<'a>() -> &'a Options{
+    OPTIONS.get_or_init( Options::parse )
 }
 
 fn load_formats(_: &Lua, tb: mlua::Table) -> mlua::Result<()>{
     let mut map = MAP.lock().map_err(|err| mlua::Error::RuntimeError(err.to_string()) )?;
+    let file_formats : Table = tb.get("file")?;
 
-    let pairs = tb.pairs::<String, String>();
-
-    for kv in pairs{
-        let (k, mut v) = kv?;
-        let pat : Vec<&str> = k.split(":").collect();
-        if pat.len() > 2 {
-            return Err(mlua::Error::RuntimeError("bad entry format".to_string()));
-        }
-
-        if pat.len() == 1 {
-            match pat[0] {
-                "file" => map.get_mut(&FileType::GenericFile),
-                "dir" => map.get_mut(&FileType::GenericDir),
-                _ => return Ok(()),
-            }.replace(&mut v);
-            continue;
-        }
-
-        let ty = pat[0];
-        let ident = pat[1];
-
-        map.insert( match ty {
-            "file" => FileType::OtherFile(ident.to_string()),
-            "dir" => FileType::OtherDir(ident.to_string()),
-            _ => return Ok(()),
-        }, v);
+    for kv in file_formats.pairs(){
+        let (k, v) : (String, Function) = kv?;
+        map.insert(FileType::OtherFile(k), v);
     }
 
     Ok(())
 }
 
-fn format_file(path: PathBuf) -> Option<String>{
-    let map = MAP.lock().ok()?;
-
-    let extension = path.extension()?.to_str()?.to_string();
-    let ft = FileType::OtherFile(extension.clone());
-
-    return map.get(&ft).and_then(|f| Some(f.clone()));
-}
-
-fn run_lua(path: PathBuf) -> Result<()> {
+fn init_lua() -> Result<()> {
     let lua = LUA.lock().map_err(|err| anyhow!(err.to_string()) )?;
+    let path = &get_options().config;
 
     let load_format_function = lua.create_function(load_formats)?;
     lua.globals().set("load_formats", load_format_function)?;
+
     let mut file = File::open(path)?;
     let mut buf = String::new();
     file.read_to_string(&mut buf)?;
@@ -112,34 +118,19 @@ fn run_lua(path: PathBuf) -> Result<()> {
     Ok(())
 }
 
-fn print_data(opts: &Options) -> Result<()>{
-
-    if opts.debug {
-        let map = MAP.lock().unwrap();
-        println!("config: {}\n", opts.config.to_str().unwrap());
-
-        println!("formats:");
-        for (k, v) in map.iter() {
-            println!("{v} {k:?}");
-        }
-        println!();
-    }
-
+fn print_data() -> Result<()>{
     let path = current_dir()?;
     let dirs = read_dir(path)?;
-
     for entry in dirs{
         if let Ok(entry) = entry {
             if entry.file_type()?.is_file() {
-                let format = match format_file(entry.path()){
-                    Some(k) => k,
-                    None => {
-                        let map = MAP.lock().unwrap();
-                        map.get(&FileType::GenericFile).unwrap().clone()
-                    },
-                };
+                let formatter = format_file(entry.path());
+
                 let name = entry.file_name().into_string().unwrap();
-                println!("{name:20} {format}");
+                let path = entry.path().to_str().unwrap().to_string();
+
+                let format : String = formatter.call((name, path, 0))?;
+                println!("{format}");
             }
             else{
             }
@@ -149,14 +140,19 @@ fn print_data(opts: &Options) -> Result<()>{
     return Ok(());
 }
 
+fn setup_lua() {
+    let _init_map = MAP.lock();
+}
 
 fn main() -> Result<()> {
-    let opts = Options::parse();
-    let pth_config = opts.config.clone();
+    OPTIONS.get_or_init( Options::parse );
 
-    run_lua(pth_config)?;
-    print_data(&opts)?;
-
+    setup_lua();
+    init_lua()?;
+    match get_options().mode{
+        Mode::List => print_data()? ,
+        Mode::Explorer => {},
+    }
 
     Ok(())
 }
