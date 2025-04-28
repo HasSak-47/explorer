@@ -16,6 +16,9 @@ local types = {
     png  = {sy = ''}, jpeg = {sy = ''}, jpg  = {sy = ''},
     lock = {sy = ''},
     nix  = {sy = '', cl={0x5B, 0xa2, 0xf1}},
+    so   = {sy = '', cl={0xf1, 0x91, 0x11}},
+    o    = {sy = '', cl={0xf1, 0x91, 0x11}},
+    py   = {sy = '', cl={0xff, 0xbf, 0x11}}
 }
 
 ---@class Color

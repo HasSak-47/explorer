@@ -38,7 +38,7 @@ fn sort_type(a: &Entry, b: &Entry) -> std::cmp::Ordering{
 
 impl List{
     pub fn ls(&self) -> Result<()>{
-        let list = self.list == true || self.recursive > 1;
+        let list = self.list == true || self.recursive > 0;
         if get_options().debug {
             println!("rec: {}", self.recursive);
             println!("list: {}", self.list);
