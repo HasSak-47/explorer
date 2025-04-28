@@ -9,6 +9,13 @@ local types = {
     toml = {sy='', cl={0xaB, 0x52, 0x31}},
     txt  = {sy='󰦨'},
     md   = {sy=''},
+    zip  = {sy = ''},
+    pdf  = {sy = ''},
+    svg  = {sy = '󰜡'},
+    csv  = {sy = ''},
+    png  = {sy = ''},
+    jpeg = {sy = ''},
+    jpg  = {sy = ''},
 }
 
 ---@class Color
@@ -51,10 +58,15 @@ local formats = {
     file = {
         function (name, _, _)
             local fmt = {}
+            local str = '󰈔 ' .. name
             if string.sub(name, 1,1) == '.' then
-                fmt = into_cells('󰈔 ' .. name, {0x99, 0x99, 0x99})
+                fmt = into_cells(str, {0x99, 0x99, 0x99})
+            elseif string.lower(name) == 'make' or string.lower(name) == 'makefile' then
+                str = '󰈔 ' .. name
+                fmt = into_cells(str)
+                fmt[1].col = {0xaa, 0x33, 0x11}
             else
-                fmt = into_cells('󰈔 ' .. name, {0xff, 0xff, 0xff})
+                fmt = into_cells(str)
             end
 
             return fmt
@@ -62,12 +74,12 @@ local formats = {
     },
     dirs = {
         function (name, _, _)
-            local fmt = {}
             local str = ' ' .. name .. '/'
+            local fmt = into_cells(str)
             if string.sub(name, 1,1) == '.' then
-                fmt = into_cells(str, {0x55, 0x55, 0x99})
+                fmt[1].col = {0x55, 0x55, 0x99}
             else
-                fmt = into_cells(str, {0x77, 0x77, 0xff})
+                fmt[1].col = {0x77, 0x77, 0xff}
             end
 
             return fmt
