@@ -6,7 +6,7 @@ use list::List;
 use util::*;
 
 use std::{
-    collections::HashMap, env::{current_dir, home_dir}, fs::{read_dir, File}, io::Read, path::PathBuf, process::exit, sync::{LazyLock, Mutex, OnceLock}, usize
+    collections::HashMap, env::home_dir, fs::File, io::Read, path::PathBuf, process::exit, sync::{LazyLock, Mutex, OnceLock}
 };
 
 use clap::Parser;

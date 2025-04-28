@@ -1,5 +1,5 @@
 use std::{
-    borrow::{Borrow, Cow}, env::current_dir, fmt::Display, fs::DirEntry, os::unix::fs::MetadataExt, path::PathBuf, time::{Duration, SystemTime, UNIX_EPOCH}
+    env::current_dir, fmt::Display, fs::DirEntry, os::unix::fs::MetadataExt, path::PathBuf, time::{Duration, SystemTime, UNIX_EPOCH}
 };
 
 use anyhow::{anyhow, Result};
