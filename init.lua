@@ -20,6 +20,28 @@ local types = {
     o    = {sy = '', cl={0xf1, 0x91, 0x11}},
     py   = {sy = '', cl={0xff, 0xbf, 0x11}}
 }
+local function parse_env(var)
+    local result = {}
+    for part in string.gmatch(var, "([^:]+)") do
+        table.insert(result, part)
+    end
+    return result
+end
+
+local data_dirs = parse_env bash 'echo $XDG_DATA_DIRS'
+local conf_dirs = parse_env bash 'echo $XDG_CONFIG_DIRS'
+
+local home = bash 'echo $HOME'
+home = string.sub(home, 1, string.len(home) - 1)
+local special = {
+    [home]                 = {sy = '󱂵'},
+    [home .. '/Documents'] = {sy = '󱧶'},
+    [home .. '/Pictures' ] = {sy = '󰉏'},
+    [home .. '/Downloads'] = {sy = '󰉍'},
+    [home .. '/Videos'   ] = {sy = '󱧺'},
+    [home .. '/Music'    ] = {sy = '󱍙'},
+    [home .. '/Desktop'  ] = {sy = ''},
+}
 
 local function into_cells(s, col)
     if not col then
@@ -65,7 +87,18 @@ local formats = {
         end,
     },
     dirs = {
-        function (name, _, _)
+        function (name, path, _)
+            local sp = special[path]
+            if sp ~= nil then
+                local fmt = into_cells(sp.sy .. ' ' .. name .. '/')
+                if sp.col then
+                    fmt[1].col = sp.col
+                else
+                fmt[1].col = {0x77, 0x77, 0xff}
+                end
+                return fmt
+            end
+
             local str = ' ' .. name .. '/'
             local fmt = into_cells(str)
             if string.sub(name, 1,1) == '.' then
