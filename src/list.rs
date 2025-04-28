@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::{fmt::{format_dir, format_file}, util::*};
 
 use anyhow::Result;
@@ -10,12 +12,28 @@ pub struct List{
     sort_by: SortBy,
 }
 
+fn sort_name(a: &Entry, b: &Entry) -> std::cmp::Ordering{
+    let v = a.name.cmp(&b.name);
+    if let Ordering::Equal = v {
+        return a.ty.cmp(&b.ty);
+    }
+    return v;
+}
+
+fn sort_type(a: &Entry, b: &Entry) -> std::cmp::Ordering{
+    let v = a.ty.cmp(&b.ty);
+    if let Ordering::Equal = v {
+        return a.name.cmp(&b.name);
+    }
+    return v;
+}
+
 impl List{
     pub fn ls(&self) -> Result<()>{
         let mut entries = read_dir()?;
         match &self.sort_by{
-            SortBy::Name => entries.sort_by(|a, b| a.name.cmp(&b.name)),
-            SortBy::Type => entries.sort_by(|a, b| a.name.cmp(&b.name)),
+            SortBy::Name => entries.sort_by(sort_name),
+            SortBy::Type => entries.sort_by(sort_type),
         }
 
         let mut v = Vec::new();

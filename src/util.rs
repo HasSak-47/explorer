@@ -13,7 +13,7 @@ pub enum SortBy{
     Type,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, PartialOrd, Eq, Ord)]
 pub enum EntryType{
     #[default]
     File,

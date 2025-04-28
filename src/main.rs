@@ -66,7 +66,6 @@ pub struct Options {
     #[arg(value_enum, long, short, default_value_t=SortBy::Name)]
     sort_by: SortBy,
 
-
     #[command(subcommand)]
     mode: Mode,
 }
