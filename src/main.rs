@@ -146,10 +146,11 @@ fn init_lua() -> Result<()> {
     let load_format_function = lua.create_function(get_formats)?;
     lua.globals().set("load_formats", load_format_function)?;
 
-    let mut file = File::open(path)?;
-    let mut buf = String::new();
-    file.read_to_string(&mut buf)?;
-    lua.load(&buf).exec()?;
+    if let Ok(mut file) = File::open(path){
+        let mut buf = String::new();
+        file.read_to_string(&mut buf)?;
+        lua.load(&buf).exec()?;
+    }
 
     Ok(())
 }

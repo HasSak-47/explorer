@@ -19,6 +19,9 @@ local types = {
 ---@param s string
 ---@return Cell[]
 local function into_cells(s, col)
+    if not col then
+        col = {0xff, 0xff, 0xff, }
+    end
     local t = {}
     for i = 1, utf.len(s), 1 do
         local s_beg = utf8.offset(s, i);
@@ -59,6 +62,7 @@ for type, sym in pairs(types) do
     local sy = sym.sy
     formats.file[type] = function (name, _, _)
         local cells = into_cells(sy .. ' ' .. name, cl)
+        cells[1].col = cl
         return cells
     end
 end
