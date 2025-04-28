@@ -9,6 +9,7 @@ use std::{
     collections::HashMap, env::home_dir, fs::File, io::Read, path::PathBuf, process::exit, sync::{LazyLock, Mutex, OnceLock}
 };
 
+
 use clap::Parser;
 use anyhow::{anyhow, Result};
 use mlua::{Function, Lua, Table};
@@ -19,10 +20,12 @@ pub static MAP : LazyLock<Mutex< HashMap<FileType, mlua::Function>>> = LazyLock:
 
     let def_file: Function = lua.load("function(name, path, tick) return '󰈔 ' .. name end").eval().unwrap();
     let def_dir: Function = lua.load("function(name, path, tick) return ' ' .. name .. '/' end").eval().unwrap();
+    let def_link: Function = lua.load("function(name, path, tick) return ' ' .. name .. '@' end").eval().unwrap();
 
     return Mutex::new(HashMap::from([
         (FT::GenericFile, def_file),
-        (FT::GenericDir, def_dir),
+        (FT::GenericDir , def_dir),
+        (FT::GenericSymLink, def_link),
     ]));
 });
 
@@ -45,6 +48,17 @@ fn config_dir() -> PathBuf {
     return config_dir;
 }
 
+#[allow(dead_code)]
+fn curr_dir() -> PathBuf {
+    use std::env::current_dir;
+    return match current_dir(){
+        Ok(s) => s,
+        Err(_) => {
+            exit(-1);
+        },
+    };
+}
+
 #[derive(Parser)]
 enum Mode{
     List(List),
@@ -54,8 +68,11 @@ enum Mode{
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 pub struct Options {
-    #[arg(long, short, default_value = "config_dir")]
+    #[arg(long, short, default_value = config_dir().display().to_string())]
     config: PathBuf,
+
+    #[arg(default_value = curr_dir().display().to_string())]
+    path: PathBuf,
 
     #[arg(long, short, default_value_t=false)]
     debug: bool,
