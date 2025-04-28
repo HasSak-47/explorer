@@ -1,5 +1,6 @@
 mod list;
 mod util;
+mod fmt;
 
 use list::List;
 use util::*;
@@ -8,20 +9,11 @@ use std::{
     collections::HashMap, env::{current_dir, home_dir}, fs::{read_dir, File}, io::Read, path::PathBuf, process::exit, sync::{LazyLock, Mutex, OnceLock}, usize
 };
 
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use anyhow::{anyhow, Result};
-use mlua::{Either, Function, Lua, Table};
+use mlua::{Function, Lua, Table};
 
-#[derive(Debug, Default, Eq, PartialEq, PartialOrd, Hash, Clone)]
-enum FileType {
-    #[default]
-    GenericFile,
-    GenericDir,
-    OtherDir(String),
-    OtherFile(String),
-}
-
-static MAP : LazyLock<Mutex< HashMap<FileType, mlua::Function>>> = LazyLock::new(||{ 
+pub static MAP : LazyLock<Mutex< HashMap<FileType, mlua::Function>>> = LazyLock::new(||{ 
     use FileType as FT;
     let lua = LUA.lock().unwrap();
 
@@ -34,7 +26,7 @@ static MAP : LazyLock<Mutex< HashMap<FileType, mlua::Function>>> = LazyLock::new
     ]));
 });
 
-static LUA: LazyLock<Mutex<Lua>> = LazyLock::new( || Mutex::new(Lua::new()) );
+pub static LUA: LazyLock<Mutex<Lua>> = LazyLock::new( || Mutex::new(Lua::new()) );
 
 #[allow(dead_code)]
 fn config_dir() -> PathBuf {
@@ -61,7 +53,7 @@ enum Mode{
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-struct Options {
+pub struct Options {
     #[arg(long, short, default_value = "config_dir")]
     config: PathBuf,
 
@@ -81,32 +73,11 @@ struct Options {
 
 static OPTIONS : OnceLock<Options> = OnceLock::new();
 
-fn _format_file<'a>(map: &'a HashMap<FileType, Function>, path: &PathBuf) -> Option<&'a Function>{
-    let extension = path.extension()?.to_str()?.to_string();
-    let ft = FileType::OtherFile(extension.clone());
-
-    return map.get(&ft);
-}
-
-fn format_file(path: &PathBuf) -> Function{
-    let map = MAP.lock().unwrap();
-    let format = _format_file(&map, path)
-        .unwrap_or(map.get(&FileType::GenericFile).unwrap());
-
-    return format.clone();
-}
-
-fn format_dir(_: &PathBuf) -> Function{
-    let map = MAP.lock().unwrap();
-    let format = map.get(&FileType::GenericDir).unwrap();
-
-    return format.clone();
-}
-
-fn get_options<'a>() -> &'a Options{
+pub fn get_options<'a>() -> &'a Options{
     OPTIONS.get_or_init( Options::parse )
 }
 
+// lua api function!
 fn get_formats(_: &Lua, tb: mlua::Table) -> mlua::Result<()>{
     let mut map = MAP.lock().map_err(|err| mlua::Error::RuntimeError(err.to_string()) )?;
     let file_formats : Table = tb.get("file")?;
@@ -151,51 +122,6 @@ fn init_lua() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn get_cells(t: Either<Table, String>) -> Result<Format>{
-    match t{
-        Either::Left(l) => Ok(Format::try_from(l)?),
-        Either::Right(r) => Ok(Format::from(r.as_str())),
-    }
-}
-
-fn print_data() -> Result<()>{
-    let path = current_dir()?;
-    let mut v : Vec<Format> = Vec::new();
-
-    let mut dirs : Vec<_> = read_dir(path)?
-        .filter(|e| e.is_ok())
-        .map(|e|{
-            let path  = e.unwrap().path();
-            let name = path.file_name().unwrap().to_str().unwrap().to_string();
-
-            return (name, path);
-        })
-        .collect();
-
-    dirs.sort_by(|a, b|{
-        let a = a.0.chars().next().unwrap().to_ascii_lowercase();
-        let b = b.0.chars().next().unwrap().to_ascii_lowercase();
-        return a.cmp(&b);
-    });
-
-    for (name, path) in dirs{
-        if path.is_file() {
-            let formatter = format_file(&path);
-            v.push( get_cells( formatter.call((name.clone(), path, 0))?)? );
-
-        }
-        else if path.is_dir() {
-            let formatter = format_dir(&path);
-            v.push( get_cells( formatter.call((name.clone(), path, 0))?)? );
-        }
-    }
-    for e in v{
-        println!("{}", e);
-    }
-
-    return Ok(());
 }
 
 fn setup_lua() {
