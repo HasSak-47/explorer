@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, env::current_dir, path::PathBuf};
 
-use crate::{fmt::{format_dir, format_file}, util::*};
+use crate::{fmt::{format_dir, format_file}, get_options, util::*};
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
@@ -14,7 +14,7 @@ pub struct List{
     #[arg(long, short, default_value_t=0)]
     recursive: u64,
 
-    #[arg(long, short, default_value_t=true)]
+    #[arg(long, short, default_value_t=false)]
     list: bool,
 
     #[arg(long, default_value_t=false)]
@@ -40,6 +40,12 @@ fn sort_type(a: &Entry, b: &Entry) -> std::cmp::Ordering{
 impl List{
     pub fn ls(&self) -> Result<()>{
         let list = self.list == true || self.recursive > 1;
+        if get_options().debug {
+            println!("rec: {}", self.recursive);
+            println!("list: {}", self.list);
+            println!("flist: {}", list);
+            
+        }
 
         let cwd = current_dir()?;
         let mut entries = read_dir(&cwd, self.hidden, self.recursive)?;
@@ -57,6 +63,20 @@ impl List{
             for e in v{
                 print!("{e:#}");
             }
+        }
+        else{
+            let max = v.iter().map(|f| f.v.len()).max().unwrap() + 4;
+            if get_options().debug {
+                println!("max: {max}");
+                
+            }
+
+            for e in v{
+                let dif = max - e.v.len();
+                print!("{}{}", e.to_string(), " ".repeat(dif));
+            }
+            println!();
+
         }
 
         return Ok(());
