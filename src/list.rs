@@ -21,7 +21,7 @@ pub struct List{
 }
 
 fn sort_name(a: &Entry, b: &Entry) -> std::cmp::Ordering{
-    let v = a.name.cmp(&b.name);
+    let v = a.name.to_lowercase().cmp(&b.name.to_lowercase());
     if let Ordering::Equal = v {
         return a.ty.cmp(&b.ty);
     }
@@ -31,7 +31,7 @@ fn sort_name(a: &Entry, b: &Entry) -> std::cmp::Ordering{
 fn sort_type(a: &Entry, b: &Entry) -> std::cmp::Ordering{
     let v = a.ty.cmp(&b.ty);
     if let Ordering::Equal = v {
-        return a.name.cmp(&b.name);
+        return a.name.to_lowercase().cmp(&b.name.to_lowercase());
     }
     return v;
 }
@@ -46,8 +46,8 @@ impl List{
             
         }
 
-        let cwd = current_dir()?;
-        let mut entries = read_dir(&cwd, self.hidden, self.recursive)?;
+        let path = &get_options().path;
+        let mut entries = read_dir(path, self.hidden, self.recursive)?;
         match &self.sort_by{
             SortBy::Name => entries.sort_by(sort_name),
             SortBy::Type => entries.sort_by(sort_type),
@@ -64,15 +64,22 @@ impl List{
             }
         }
         else{
-            let max = v.iter().map(|f| f.v.len()).max().unwrap() + 4;
+            let (cols, _rows) = crossterm::terminal::size()?;
+            let max = v.iter().map(|f| f.v.len()).max().unwrap() + 1;
             if get_options().debug {
                 println!("max: {max}");
-                
             }
 
+            let mut current = 0;
+            let cap = cols as usize / max;
             for e in v{
+                if current >= cap{
+                    current = 0;
+                    println!();
+                }
                 let dif = max - e.v.len();
                 print!("{}{}", e.to_string(), " ".repeat(dif));
+                current += 1;
             }
             println!();
 

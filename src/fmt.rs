@@ -21,3 +21,10 @@ pub fn format_dir(_: &PathBuf) -> Function{
 
     return format.clone();
 }
+
+pub fn format_link(_: &PathBuf) -> Function{
+    let map = MAP.lock().unwrap();
+    let format = map.get(&FileType::GenericSymLink).unwrap();
+
+    return format.clone();
+}

@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use clap::ValueEnum;
 use mlua::{Either, Table};
 
-use crate::fmt::{format_dir, format_file};
+use crate::fmt::{format_dir, format_file, format_link};
 
 #[derive(ValueEnum, Debug, Default, Clone)]
 pub enum SortBy{
@@ -28,6 +28,7 @@ pub enum FileType {
     #[default]
     GenericFile,
     GenericDir,
+    GenericSymLink,
     OtherDir(String),
     OtherFile(String),
 }
@@ -141,12 +142,15 @@ impl TryFrom<Table> for Format {
 
             let chr: String = val.get("chr")?;
             let chr = chr.chars().into_iter().next().ok_or(anyhow!("no char?"))?;
-            let col: Table = val.get("col")?;
+            let col = match val.get::<Table>("col"){
+                Ok(k) => {(
+                    k.get(1).unwrap_or(0xff),
+                    k.get(2).unwrap_or(0xff),
+                    k.get(3).unwrap_or(0xff),
+                )},
+                _ => (0xff, 0xff, 0xff, ),
+            };
 
-            let r : u8 = col.get(1).unwrap_or(0xff);
-            let g : u8 = col.get(2).unwrap_or(0xff);
-            let b : u8 = col.get(3).unwrap_or(0xff);
-            let col = (r, g, b);
             v.push(Cell{ chr, col, })
         }
 
@@ -172,12 +176,16 @@ impl TryFrom<Entry> for Format{
         let formatter = if let EntryType::File = entry.ty {
             format_file(&entry.path)
         }
-        else {
+        else
+        if let EntryType::Dir = entry.ty {
             for child in entry.childs {
                 childs.push(Format::try_from(child)?);
             }
             format_dir(&entry.path)
 
+        }
+        else {
+            format_link(&entry.path)
         };
 
         let mut fmt =  Format::try_from( formatter.call::<Either<Table, String>>((entry.name, entry.path, 0))?)?;

@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
-clap = { version = "4.5.37", features = ["derive"] }
+clap = { version = "4.5.37", features = ["derive", "string"] }
 crossterm = "0.29.0"
 mlua = { version = "0.10.3", features = ["lua54", "anyhow", "send"] }
 thiserror = "2.0.12"
