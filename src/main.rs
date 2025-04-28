@@ -4,7 +4,7 @@ use std::{
 
 use clap::Parser;
 use anyhow::{anyhow, Result};
-use mlua::{Function, Lua, Table};
+use mlua::{Either, Function, Lua, Table};
 
 #[derive(Debug, Default, Eq, PartialEq, PartialOrd, Hash, Clone)]
 enum FileType {
@@ -17,9 +17,10 @@ enum FileType {
 
 static MAP : LazyLock<Mutex< HashMap<FileType, mlua::Function>>> = LazyLock::new(||{ 
     use FileType as FT;
+    let lua = LUA.lock().unwrap();
 
-    let def_file: Function = LUA.lock().unwrap().load("function(name, path, tick) return '󰈔 ' .. name end").eval().unwrap();
-    let def_dir: Function = LUA.lock().unwrap().load("function(name, path, tick) return ' ' .. name .. '/' end").eval().unwrap();
+    let def_file: Function = lua.load("function(name, path, tick) return '󰈔 ' .. name end").eval().unwrap();
+    let def_dir: Function = lua.load("function(name, path, tick) return ' ' .. name .. '/' end").eval().unwrap();
 
     return Mutex::new(HashMap::from([
         (FT::GenericFile, def_file),
@@ -82,6 +83,13 @@ fn format_file(path: PathBuf) -> Function{
     let map = MAP.lock().unwrap();
     let format = _format_file(&map, path)
         .unwrap_or(map.get(&FileType::GenericFile).unwrap());
+
+    return format.clone();
+}
+
+fn format_dir(_: PathBuf) -> Function{
+    let map = MAP.lock().unwrap();
+    let format = map.get(&FileType::GenericDir).unwrap();
 
     return format.clone();
 }
@@ -160,7 +168,7 @@ fn get_cells(t: Table) -> Result<Vec<Cell>>{
     return Ok(cells);
 }
 
-fn format_cells(t: Table) -> Result<String>{
+fn format_table(t: Table) -> Result<String>{
     let mut pc = (0xff, 0xff, 0xff);
 
     let cells = get_cells(t)?;
@@ -182,6 +190,13 @@ fn format_cells(t: Table) -> Result<String>{
     return Ok(string);
 }
 
+fn format_cells(t: Either<Table, String>) -> Result<String>{
+    return match t{
+        Either::Left(l) => format_table(l),
+        Either::Right(r) => Ok(r),
+    };
+}
+
 fn print_data() -> Result<()>{
     let path = current_dir()?;
     let dirs = read_dir(path)?;
@@ -196,13 +211,14 @@ fn print_data() -> Result<()>{
                 let s = format_cells(formatter.call((name.clone(), path, 0))?)?;
                 println!("{s}");
             }
-            else if entry.file_type()?.is_file() {
-                let formatter = format_file(entry.path());
+            else if entry.file_type()?.is_dir() {
+                let formatter = format_dir(entry.path());
 
                 let name = entry.file_name().into_string().unwrap();
                 let path = entry.path().to_str().unwrap().to_string();
                 
                 let s = format_cells(formatter.call((name.clone(), path, 0))?)?;
+                println!("{s}");
             }
         }
     }
