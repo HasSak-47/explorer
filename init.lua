@@ -13,9 +13,9 @@ local types = {
     pdf  = {sy = ''},
     svg  = {sy = '󰜡'},
     csv  = {sy = ''},
-    png  = {sy = ''},
-    jpeg = {sy = ''},
-    jpg  = {sy = ''},
+    png  = {sy = ''}, jpeg = {sy = ''}, jpg  = {sy = ''},
+    lock = {sy = ''},
+    nix  = {sy = '', cl={0x5B, 0xa2, 0xf1}},
 }
 
 ---@class Color
@@ -62,7 +62,7 @@ local formats = {
             if string.sub(name, 1,1) == '.' then
                 fmt = into_cells(str, {0x99, 0x99, 0x99})
             elseif string.lower(name) == 'make' or string.lower(name) == 'makefile' then
-                str = '󰈔 ' .. name
+                str = ' ' .. name
                 fmt = into_cells(str)
                 fmt[1].col = {0xaa, 0x33, 0x11}
             else
