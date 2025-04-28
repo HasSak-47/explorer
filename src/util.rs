@@ -4,7 +4,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use clap::ValueEnum;
-use mlua::Table;
+use mlua::{Either, Table};
 
 #[derive(ValueEnum, Debug, Default, Clone)]
 pub enum SortBy{
@@ -21,9 +21,22 @@ pub enum EntryType{
     SymLink
 }
 
+#[derive(Debug, Default, Eq, PartialEq, PartialOrd, Hash, Clone)]
+pub enum FileType {
+    #[default]
+    GenericFile,
+    GenericDir,
+    OtherDir(String),
+    OtherFile(String),
+}
+
+#[allow(dead_code)]
 pub type Permissions = u32;
+#[allow(dead_code)]
 const READ : Permissions = 0b001;
+#[allow(dead_code)]
 const WRITE: Permissions = 0b010;
+#[allow(dead_code)]
 const EXEC : Permissions = 0b100;
 
 #[derive(Debug)]
@@ -39,7 +52,9 @@ pub struct Entry{
     // pub user: String,
     // pub group: String,
 
+    #[allow(dead_code)]
     pub size: u64,
+    #[allow(dead_code)]
     pub date: SystemTime,
 }
 
@@ -113,6 +128,16 @@ impl TryFrom<Table> for Format {
         }
 
         return Ok(Format{v});
+    }
+}
+
+impl TryFrom<Either<Table, String>> for Format{
+    type Error = anyhow::Error;
+    fn try_from(value: Either<Table, String>) -> Result<Self> {
+        match value {
+            Either::Left(l) => Format::try_from(l),
+            Either::Right(r) => Ok(Format::from(r.as_str())),
+        }
     }
 }
 
