@@ -1,10 +1,9 @@
-use std::{cmp::Ordering, env::current_dir, path::PathBuf};
+use std::{cmp::Ordering, env::current_dir};
 
-use crate::{fmt::{format_dir, format_file}, get_options, util::*};
+use crate::{get_options, util::*};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::Parser;
-use mlua::{Either, Table};
 
 #[derive(Debug, Parser, Clone)]
 pub struct List{
