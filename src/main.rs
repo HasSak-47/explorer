@@ -1,3 +1,9 @@
+mod list;
+mod util;
+
+use list::List;
+use util::*;
+
 use std::{
     collections::HashMap, env::{current_dir, home_dir}, fs::{read_dir, File}, io::Read, path::PathBuf, process::exit, sync::{LazyLock, Mutex, OnceLock}, usize
 };
@@ -47,21 +53,13 @@ fn config_dir() -> PathBuf {
     return config_dir;
 }
 
-#[derive(Parser, Default, Clone)]
+#[derive(Parser)]
 enum Mode{
-    #[default]
-    List,
+    List(List),
     Explorer,
 }
 
-#[derive(ValueEnum, Default, Clone)]
-enum SortBy{
-    #[default]
-    Name,
-    Type,
-}
-
-#[derive(Parser, Default, Clone)]
+#[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Options {
     #[arg(long, short, default_value = "config_dir")]
@@ -155,71 +153,16 @@ fn init_lua() -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone)]
-struct Cell{
-    chr : char,
-    col : (u8, u8, u8,),
-}
-
-fn get_cells_string(s: String) -> Vec<Cell>{
-    let mut v = Vec::new();
-    for chr in s.chars(){
-        v.push(Cell{chr, col: (0xff, 0xff, 0xff, )});
-    }
-
-    return v;
-}
-
-fn get_cells_table(t: Table) -> Result<Vec<Cell>>{
-    let mut cells = Vec::new();
-    for kv in t.pairs(){
-        let (_, v): (usize, Table) = kv?;
-
-        let chr: String = v.get("chr")?;
-        let chr = chr.chars().into_iter().next().ok_or(anyhow!("no char?"))?;
-        let col: Table = v.get("col")?;
-
-        let r : u8 = col.get(1).unwrap_or(0xff);
-        let g : u8 = col.get(2).unwrap_or(0xff);
-        let b : u8 = col.get(3).unwrap_or(0xff);
-        let col = (r, g, b);
-        cells.push(Cell{ chr, col, })
-    }
-
-    return Ok(cells);
-}
-
-fn get_cells(t: Either<Table, String>) -> Result<Vec<Cell>>{
+fn get_cells(t: Either<Table, String>) -> Result<Format>{
     match t{
-        Either::Left(l) => get_cells_table(l),
-        Either::Right(r) => Ok(get_cells_string(r)),
+        Either::Left(l) => Ok(Format::try_from(l)?),
+        Either::Right(r) => Ok(Format::from(r.as_str())),
     }
-}
-
-fn print_cells(cells: Vec<Cell>) -> String{
-    let mut pc = (0xff, 0xff, 0xff);
-
-    let mut string = String::new();
-    for cell in cells{
-        if cell.col != pc {
-            pc = cell.col;
-            let (r, g, b) = pc;
-            string.push_str(&format!("\x1b[38;2;{r};{g};{b}m"));
-            
-        }
-        string.push(cell.chr);
-    }
-
-    if pc != (0xff, 0xff, 0xff) {
-        string.push_str("\x1b[0m");
-    }
-
-    return string;
 }
 
 fn print_data() -> Result<()>{
     let path = current_dir()?;
-    let mut v : Vec<Vec<Cell>> = Vec::new();
+    let mut v : Vec<Format> = Vec::new();
 
     let mut dirs : Vec<_> = read_dir(path)?
         .filter(|e| e.is_ok())
@@ -249,7 +192,7 @@ fn print_data() -> Result<()>{
         }
     }
     for e in v{
-        println!("{}", print_cells(e));
+        println!("{}", e);
     }
 
     return Ok(());
@@ -264,8 +207,8 @@ fn main() -> Result<()> {
 
     setup_lua();
     init_lua()?;
-    match get_options().mode{
-        Mode::List => print_data()? ,
+    match &get_options().mode{
+        Mode::List(ls) => ls.ls()?,//print_data()? ,
         Mode::Explorer => {},
     }
 
