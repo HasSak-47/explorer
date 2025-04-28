@@ -21,17 +21,6 @@ local types = {
     py   = {sy = '', cl={0xff, 0xbf, 0x11}}
 }
 
----@class Color
----@field [1] number
----@field [2] number
----@field [3] number
-
----@class Cell
----@field chr string
----@field col Color
-
----@param s string
----@return Cell[]
 local function into_cells(s, col)
     if not col then
         col = {0xff, 0xff, 0xff, }
@@ -90,16 +79,18 @@ local formats = {
     },
 }
 
-for type, sym in pairs(types) do
-    local cl = sym.cl
-    local sy = sym.sy
-    formats.file[type] = function (name, _, _)
+local function register_generic(sy, cl)
+    return function (name, _, _)
         local cells = into_cells(sy .. ' ' .. name)
         cells[1].col = cl
         return cells
     end
 end
 
-
+for type, sym in pairs(types) do
+    local cl = sym.cl
+    local sy = sym.sy
+    formats.file[type] = register_generic(sy, cl)
+end
 
 load_formats(formats)
