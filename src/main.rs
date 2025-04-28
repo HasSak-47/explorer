@@ -196,7 +196,13 @@ fn print_data() -> Result<()>{
                 let s = format_cells(formatter.call((name.clone(), path, 0))?)?;
                 println!("{s}");
             }
-            else{
+            else if entry.file_type()?.is_file() {
+                let formatter = format_file(entry.path());
+
+                let name = entry.file_name().into_string().unwrap();
+                let path = entry.path().to_str().unwrap().to_string();
+                
+                let s = format_cells(formatter.call((name.clone(), path, 0))?)?;
             }
         }
     }
