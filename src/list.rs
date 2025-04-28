@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, env::current_dir};
+use std::cmp::Ordering;
 
 use crate::{get_options, util::*};
 
