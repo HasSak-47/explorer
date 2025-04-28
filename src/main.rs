@@ -1,7 +1,10 @@
 mod list;
 mod util;
 mod fmt;
+mod explorer;
+mod api;
 
+use api::{get_formats, bash};
 use list::List;
 use util::*;
 
@@ -12,7 +15,7 @@ use std::{
 
 use clap::Parser;
 use anyhow::{anyhow, Result};
-use mlua::{Function, Lua, Table};
+use mlua::{Function, Lua};
 
 pub static MAP : LazyLock<Mutex< HashMap<FileType, mlua::Function>>> = LazyLock::new(||{ 
     use FileType as FT;
@@ -93,43 +96,14 @@ pub fn get_options<'a>() -> &'a Options{
     OPTIONS.get_or_init( Options::parse )
 }
 
-// lua api function!
-fn get_formats(_: &Lua, tb: mlua::Table) -> mlua::Result<()>{
-    let mut map = MAP.lock().map_err(|err| mlua::Error::RuntimeError(err.to_string()) )?;
-    let file_formats : Table = tb.get("file")?;
-
-    match file_formats.get(1){
-        Ok(default) => {
-            *map.get_mut(&FileType::GenericFile).unwrap() = default;
-        }
-        Err(_) => {},
-    }
-    for kv in file_formats.pairs(){
-        let (k, v) : (String, Function) = kv?;
-        map.insert(FileType::OtherFile(k), v);
-    }
-
-    let dirs_format : Table = tb.get("dirs")?;
-    match dirs_format.get(1){
-        Ok(default) => {
-            *map.get_mut(&FileType::GenericDir).unwrap() = default;
-        }
-        Err(_) => {},
-    }
-    for kv in file_formats.pairs(){
-        let (k, v) : (String, Function) = kv?;
-        map.insert(FileType::OtherDir(k), v);
-    }
-
-    Ok(())
-}
-
 fn init_lua() -> Result<()> {
     let lua = LUA.lock().map_err(|err| anyhow!(err.to_string()) )?;
     let path = &get_options().config;
 
     let load_format_function = lua.create_function(get_formats)?;
     lua.globals().set("load_formats", load_format_function)?;
+    let bash_function = lua.create_function(bash)?;
+    lua.globals().set("bash", bash_function)?;
 
     if let Ok(mut file) = File::open(path){
         let mut buf = String::new();
