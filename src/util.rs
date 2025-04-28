@@ -6,6 +6,8 @@ use anyhow::{anyhow, Result};
 use clap::ValueEnum;
 use mlua::{Either, Table};
 
+use crate::fmt::{format_dir, format_file};
+
 #[derive(ValueEnum, Debug, Default, Clone)]
 pub enum SortBy{
     #[default]
@@ -56,31 +58,51 @@ pub struct Entry{
     pub size: u64,
     #[allow(dead_code)]
     pub date: SystemTime,
+
+    pub childs: Vec<Entry>,
 }
 
-fn process_entry(entry : std::io::Result<DirEntry>) -> Result<Entry>{
+fn process_entry(entry : std::io::Result<DirEntry>, hidden: bool, depth: u64) -> Result<Entry>{
     let entry = entry?;
     let path = entry.path();
     let name = path.file_name().unwrap().to_str().unwrap().to_string();
+
+    // WARN: NOT A GOOD
+    if name.chars().next().ok_or(anyhow!("no first char?"))? == '.' && !hidden{
+        return Err(anyhow!("error to ignore :)"));
+    }
+
     let meta = path.metadata()?;
+
 
     let size = meta.size();
     let date = UNIX_EPOCH + Duration::new(meta.ctime() as u64, 0) ;
 
-    let ty = if path.is_dir() { EntryType::Dir }
-    else if path.is_symlink(){ EntryType::SymLink }
-    else{ EntryType::File } ;
+    let mut childs = Vec::new();
+    let ty = if path.is_dir() {
+        if depth > 0 {
+            childs = read_dir(&path, hidden, depth - 1)?;
+        }
+        EntryType::Dir
+    }
+    else if path.is_symlink(){
+        EntryType::SymLink
+    }
+    else{
+        EntryType::File
+    } ;
 
-    Ok(Entry{ name, path, size, date, ty })
+
+
+    Ok(Entry{ name, path, size, date, ty, childs })
 }
 
-pub fn read_dir() -> Result<Vec<Entry>>{
+pub fn read_dir(path: &PathBuf, hidden: bool, depth: u64) -> Result<Vec<Entry>>{
     let mut v = Vec::new();
-    let path = current_dir()?;
     let dir = std::fs::read_dir(path)?;
 
     for entry in dir{
-        if let Ok(k) = process_entry(entry){
+        if let Ok(k) = process_entry(entry, hidden, depth){
             v.push(k);
         }
     }
@@ -95,6 +117,7 @@ pub struct Cell{
 
 pub struct Format{
     pub v: Vec<Cell>,
+    pub childs: Vec<Format>,
 }
 
 impl From<&str> for Format {
@@ -104,7 +127,7 @@ impl From<&str> for Format {
             v.push(Cell{chr, col: (0xff, 0xff, 0xff, )});
         }
 
-        return Format{v};
+        return Format{v, childs: Vec::new()};
     }
 }
 
@@ -127,7 +150,7 @@ impl TryFrom<Table> for Format {
             v.push(Cell{ chr, col, })
         }
 
-        return Ok(Format{v});
+        return Ok(Format{v, childs: Vec::new()});
     }
 }
 
@@ -141,9 +164,43 @@ impl TryFrom<Either<Table, String>> for Format{
     }
 }
 
+impl TryFrom<Entry> for Format{
+    type Error = anyhow::Error;
+
+    fn try_from(entry: Entry) -> Result<Self> {
+        let mut childs = Vec::new();
+        let formatter = if let EntryType::File = entry.ty {
+            format_file(&entry.path)
+        }
+        else {
+            for child in entry.childs {
+                childs.push(Format::try_from(child)?);
+            }
+            format_dir(&entry.path)
+
+        };
+
+        let mut fmt =  Format::try_from( formatter.call::<Either<Table, String>>((entry.name, entry.path, 0))?)?;
+        fmt.childs = childs;
+        return Ok(fmt);
+
+    }
+}
+
+fn rec_format_format(fmt: &Format, depth: u64, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result{
+    writeln!(f, "{}{}", "\t".repeat(depth as usize), fmt)?;
+    for child in &fmt.childs {
+        rec_format_format(&child, depth + 1, f)?;
+    }
+    return Ok(());
+}
+
 impl Display for Format{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut pc = (0xff, 0xff, 0xff);
+        if f.alternate(){
+            return rec_format_format(self, 0, f);
+        }
 
         for cell in &self.v {
             if cell.col != pc {
