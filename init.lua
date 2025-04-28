@@ -1,46 +1,68 @@
-
-local function set_color(r, g, b)
-    if type(r) == "number" then
-        return '\x1b[38;2;' .. r .. ';' .. g .. ';' .. b .. 'm'
-    else
-        local rc = tonumber(string.sub(r, 1, 2), 16)
-        local gc = tonumber(string.sub(r, 3, 4), 16) or 0
-        local bc = tonumber(string.sub(r, 5, 6), 16) or 0
-
-        return set_color(rc, gc, bc)
-    end
-end
-
-local function reset_col()
-    return '\x1b[0m'
-end
+local utf = require 'utf8'
 
 local types = {
-    lua  = set_color('00b3d7') .. '',
-    rust = '󱘗',
-    cpp  = '',
-    toml = '',
+    lua  = {sy='', cl={0x99, 0x99, 0xff}},
+    rust = {sy='󱘗', cl={0xff, 0xff, 0xff}},
+    cpp  = {sy='', cl={0xff, 0xff, 0xff}},
+    toml = {sy='', cl={0x9B, 0x42, 0x21}},
 }
 
-local formats = {
-    file = {function (name, _full_path, _tick)
-        local s = ''
-        if string.sub(name, 1, 1) == '.' then
-            s = s .. set_color('888888')
+---@class Color
+---@field [1] number
+---@field [2] number
+---@field [3] number
+
+---@class Cell
+---@field chr string
+---@field col Color
+
+---@param s string
+---@return Cell[]
+local function into_cells(s, col)
+    local t = {}
+    for i = 1, utf.len(s), 1 do
+        local s_beg = utf8.offset(s, i);
+        local s_end = utf8.offset(s, i + 1);
+        local c = ''
+
+        if s_end then
+            c = string.sub(s, s_beg, s_end - 1)
+        else
+            c = string.sub(s, s_beg)
         end
-        return s .. '󰈔 ' .. name .. reset_col()
+
+        table.insert(t, {
+            chr = c,
+            col = col
+        })
+    end
+
+    return t
+end
+
+local formats = {
+    file = {function (name, _, _)
+        local fmt = {}
+        if string.sub(name, 1,1) == '.' then
+            fmt = into_cells('󰈔 ' .. name, {0x99, 0x99, 0x99})
+        else
+            fmt = into_cells('󰈔 ' .. name, {0xff, 0xff, 0xff})
+        end
+
+        return fmt
     end,},
     dirs = {},
 }
 
 for type, sym in pairs(types) do
-    ---@param name string
-    ---@param _full_path string
-    ---@param _tick number
-    ---@return unknown
-    formats.file[type] = function (name, _full_path, _tick)
-        return sym .. ' ' .. name .. reset_col()
+    local cl = sym.cl
+    local sy = sym.sy
+    formats.file[type] = function (name, _, _)
+        local cells = into_cells(sy .. ' ' .. name, cl)
+        return cells
     end
 end
+
+
 
 load_formats(formats)

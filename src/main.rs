@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap, env::{current_dir, home_dir}, fs::{read_dir, File}, io::Read, path::PathBuf, process::exit, sync::{LazyLock, Mutex, Once, OnceLock},
-    thread,
+    collections::HashMap, env::{current_dir, home_dir}, fs::{read_dir, File}, io::Read, path::PathBuf, process::exit, sync::{LazyLock, Mutex, Once, OnceLock}, thread, usize
 };
 
 use clap::Parser;
@@ -20,7 +19,7 @@ static MAP : LazyLock<Mutex< HashMap<FileType, mlua::Function>>> = LazyLock::new
     use FileType as FT;
 
     let def_file: Function = LUA.lock().unwrap().load("function(name, path, tick) return '󰈔 ' .. name end").eval().unwrap();
-    let def_dir: Function = LUA.lock().unwrap().load("function(name, path, tick) return ' ' .. name end").eval().unwrap();
+    let def_dir: Function = LUA.lock().unwrap().load("function(name, path, tick) return ' ' .. name .. '/' end").eval().unwrap();
 
     return Mutex::new(HashMap::from([
         (FT::GenericFile, def_file),
@@ -91,15 +90,31 @@ fn get_options<'a>() -> &'a Options{
     OPTIONS.get_or_init( Options::parse )
 }
 
-fn load_file_formats(_: &Lua, tb: mlua::Table) -> mlua::Result<()>{
+fn get_formats(_: &Lua, tb: mlua::Table) -> mlua::Result<()>{
     let mut map = MAP.lock().map_err(|err| mlua::Error::RuntimeError(err.to_string()) )?;
     let file_formats : Table = tb.get("file")?;
 
-    let default : Function = file_formats.get(1)?;
-    *map.get_mut(&FileType::GenericFile).unwrap() = default;
+    match file_formats.get(1){
+        Ok(default) => {
+            *map.get_mut(&FileType::GenericFile).unwrap() = default;
+        }
+        Err(_) => {},
+    }
     for kv in file_formats.pairs(){
         let (k, v) : (String, Function) = kv?;
         map.insert(FileType::OtherFile(k), v);
+    }
+
+    let dirs_format : Table = tb.get("dirs")?;
+    match dirs_format.get(1){
+        Ok(default) => {
+            *map.get_mut(&FileType::GenericDir).unwrap() = default;
+        }
+        Err(_) => {},
+    }
+    for kv in file_formats.pairs(){
+        let (k, v) : (String, Function) = kv?;
+        map.insert(FileType::OtherDir(k), v);
     }
 
     Ok(())
@@ -109,7 +124,7 @@ fn init_lua() -> Result<()> {
     let lua = LUA.lock().map_err(|err| anyhow!(err.to_string()) )?;
     let path = &get_options().config;
 
-    let load_format_function = lua.create_function(load_file_formats)?;
+    let load_format_function = lua.create_function(get_formats)?;
     lua.globals().set("load_formats", load_format_function)?;
 
     let mut file = File::open(path)?;
@@ -118,6 +133,53 @@ fn init_lua() -> Result<()> {
     lua.load(&buf).exec()?;
 
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct Cell{
+    chr : char,
+    col : (u8, u8, u8,),
+}
+
+fn get_cells(t: Table) -> Result<Vec<Cell>>{
+    let mut cells = Vec::new();
+    for kv in t.pairs(){
+        let (_, v): (usize, Table) = kv?;
+
+        let chr: String = v.get("chr")?;
+        let chr = chr.chars().into_iter().next().ok_or(anyhow!("no char?"))?;
+        let col: Table = v.get("col")?;
+
+        let r : u8 = col.get(1).unwrap_or(0xff);
+        let g : u8 = col.get(2).unwrap_or(0xff);
+        let b : u8 = col.get(3).unwrap_or(0xff);
+        let col = (r, g, b);
+        cells.push(Cell{ chr, col, })
+    }
+
+    return Ok(cells);
+}
+
+fn format_cells(t: Table) -> Result<String>{
+    let mut pc = (0xff, 0xff, 0xff);
+
+    let cells = get_cells(t)?;
+    let mut string = String::new();
+    for cell in cells{
+        if cell.col != pc {
+            pc = cell.col;
+            let (r, g, b) = pc;
+            string.push_str(&format!("\x1b[38;2;{r};{g};{b}m"));
+            
+        }
+        string.push(cell.chr);
+    }
+
+    if pc != (0xff, 0xff, 0xff) {
+        string.push_str("\x1b[0m");
+    }
+
+    return Ok(string);
 }
 
 fn print_data() -> Result<()>{
@@ -130,9 +192,9 @@ fn print_data() -> Result<()>{
 
                 let name = entry.file_name().into_string().unwrap();
                 let path = entry.path().to_str().unwrap().to_string();
-
-                let format : String = formatter.call((name, path, 0))?;
-                println!("{format}");
+                
+                let s = format_cells(formatter.call((name.clone(), path, 0))?)?;
+                println!("{s}");
             }
             else{
             }
