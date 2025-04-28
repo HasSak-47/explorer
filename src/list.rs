@@ -1,15 +1,24 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, env::current_dir, path::PathBuf};
 
 use crate::{fmt::{format_dir, format_file}, util::*};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 use mlua::{Either, Table};
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 pub struct List{
     #[arg(value_enum, long, short, default_value_t=SortBy::Name)]
     sort_by: SortBy,
+
+    #[arg(long, short, default_value_t=0)]
+    recursive: u64,
+
+    #[arg(long, short, default_value_t=true)]
+    list: bool,
+
+    #[arg(long, default_value_t=false)]
+    hidden: bool,
 }
 
 fn sort_name(a: &Entry, b: &Entry) -> std::cmp::Ordering{
@@ -30,7 +39,10 @@ fn sort_type(a: &Entry, b: &Entry) -> std::cmp::Ordering{
 
 impl List{
     pub fn ls(&self) -> Result<()>{
-        let mut entries = read_dir()?;
+        let list = self.list == true || self.recursive > 1;
+
+        let cwd = current_dir()?;
+        let mut entries = read_dir(&cwd, self.hidden, self.recursive)?;
         match &self.sort_by{
             SortBy::Name => entries.sort_by(sort_name),
             SortBy::Type => entries.sort_by(sort_type),
@@ -38,18 +50,15 @@ impl List{
 
         let mut v = Vec::new();
         for entry in entries{
-            let formatter = if let EntryType::File = entry.ty {
-                format_file(&entry.path)
-            }
-            else {
-                format_dir(&entry.path)
-            };
-            v.push( Format::try_from( formatter.call::<Either<Table, String>>((entry.name, entry.path, 0))?)? );
+            v.push(Format::try_from(entry)?);
         }
 
-        for e in v{
-            println!("{}", e);
+        if list{
+            for e in v{
+                print!("{e:#}");
+            }
         }
-        Ok(())
+
+        return Ok(());
     }
 }
