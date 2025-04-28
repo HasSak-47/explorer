@@ -2,7 +2,7 @@ use std::{
     collections::HashMap, env::{current_dir, home_dir}, fs::{read_dir, File}, io::Read, path::PathBuf, process::exit, sync::{LazyLock, Mutex, OnceLock}, usize
 };
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use anyhow::{anyhow, Result};
 use mlua::{Either, Function, Lua, Table};
 
@@ -54,6 +54,13 @@ enum Mode{
     Explorer,
 }
 
+#[derive(ValueEnum, Default, Clone)]
+enum SortBy{
+    #[default]
+    Name,
+    Type,
+}
+
 #[derive(Parser, Default, Clone)]
 #[command(version, about, long_about = None)]
 struct Options {
@@ -66,20 +73,24 @@ struct Options {
     #[arg(long, short, default_value_t=false)]
     verbose: bool,
 
+    #[arg(value_enum, long, short, default_value_t=SortBy::Name)]
+    sort_by: SortBy,
+
+
     #[command(subcommand)]
     mode: Mode,
 }
 
 static OPTIONS : OnceLock<Options> = OnceLock::new();
 
-fn _format_file(map: &HashMap<FileType, Function>, path: PathBuf) -> Option<&Function>{
+fn _format_file<'a>(map: &'a HashMap<FileType, Function>, path: &PathBuf) -> Option<&'a Function>{
     let extension = path.extension()?.to_str()?.to_string();
     let ft = FileType::OtherFile(extension.clone());
 
     return map.get(&ft);
 }
 
-fn format_file(path: PathBuf) -> Function{
+fn format_file(path: &PathBuf) -> Function{
     let map = MAP.lock().unwrap();
     let format = _format_file(&map, path)
         .unwrap_or(map.get(&FileType::GenericFile).unwrap());
@@ -87,7 +98,7 @@ fn format_file(path: PathBuf) -> Function{
     return format.clone();
 }
 
-fn format_dir(_: PathBuf) -> Function{
+fn format_dir(_: &PathBuf) -> Function{
     let map = MAP.lock().unwrap();
     let format = map.get(&FileType::GenericDir).unwrap();
 
@@ -149,7 +160,16 @@ struct Cell{
     col : (u8, u8, u8,),
 }
 
-fn get_cells(t: Table) -> Result<Vec<Cell>>{
+fn get_cells_string(s: String) -> Vec<Cell>{
+    let mut v = Vec::new();
+    for chr in s.chars(){
+        v.push(Cell{chr, col: (0xff, 0xff, 0xff, )});
+    }
+
+    return v;
+}
+
+fn get_cells_table(t: Table) -> Result<Vec<Cell>>{
     let mut cells = Vec::new();
     for kv in t.pairs(){
         let (_, v): (usize, Table) = kv?;
@@ -168,10 +188,16 @@ fn get_cells(t: Table) -> Result<Vec<Cell>>{
     return Ok(cells);
 }
 
-fn format_table(t: Table) -> Result<String>{
+fn get_cells(t: Either<Table, String>) -> Result<Vec<Cell>>{
+    match t{
+        Either::Left(l) => get_cells_table(l),
+        Either::Right(r) => Ok(get_cells_string(r)),
+    }
+}
+
+fn print_cells(cells: Vec<Cell>) -> String{
     let mut pc = (0xff, 0xff, 0xff);
 
-    let cells = get_cells(t)?;
     let mut string = String::new();
     for cell in cells{
         if cell.col != pc {
@@ -187,40 +213,42 @@ fn format_table(t: Table) -> Result<String>{
         string.push_str("\x1b[0m");
     }
 
-    return Ok(string);
-}
-
-fn format_cells(t: Either<Table, String>) -> Result<String>{
-    return match t{
-        Either::Left(l) => format_table(l),
-        Either::Right(r) => Ok(r),
-    };
+    return string;
 }
 
 fn print_data() -> Result<()>{
     let path = current_dir()?;
-    let dirs = read_dir(path)?;
-    for entry in dirs{
-        if let Ok(entry) = entry {
-            if entry.file_type()?.is_file() {
-                let formatter = format_file(entry.path());
+    let mut v : Vec<Vec<Cell>> = Vec::new();
 
-                let name = entry.file_name().into_string().unwrap();
-                let path = entry.path().to_str().unwrap().to_string();
-                
-                let s = format_cells(formatter.call((name.clone(), path, 0))?)?;
-                println!("{s}");
-            }
-            else if entry.file_type()?.is_dir() {
-                let formatter = format_dir(entry.path());
+    let mut dirs : Vec<_> = read_dir(path)?
+        .filter(|e| e.is_ok())
+        .map(|e|{
+            let path  = e.unwrap().path();
+            let name = path.file_name().unwrap().to_str().unwrap().to_string();
 
-                let name = entry.file_name().into_string().unwrap();
-                let path = entry.path().to_str().unwrap().to_string();
-                
-                let s = format_cells(formatter.call((name.clone(), path, 0))?)?;
-                println!("{s}");
-            }
+            return (name, path);
+        })
+        .collect();
+
+    dirs.sort_by(|a, b|{
+        let a = a.0.chars().next().unwrap().to_ascii_lowercase();
+        let b = b.0.chars().next().unwrap().to_ascii_lowercase();
+        return a.cmp(&b);
+    });
+
+    for (name, path) in dirs{
+        if path.is_file() {
+            let formatter = format_file(&path);
+            v.push( get_cells( formatter.call((name.clone(), path, 0))?)? );
+
         }
+        else if path.is_dir() {
+            let formatter = format_dir(&path);
+            v.push( get_cells( formatter.call((name.clone(), path, 0))?)? );
+        }
+    }
+    for e in v{
+        println!("{}", print_cells(e));
     }
 
     return Ok(());
