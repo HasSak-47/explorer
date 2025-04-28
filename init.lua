@@ -2,6 +2,7 @@ local utf = require 'utf8'
 
 local types = {
     lua  = {sy='', cl={0x99, 0x99, 0xff}},
+    sh   = {sy='󱆃', cl={0x99, 0xff, 0x99}},
     rs   = {sy='󱘗', cl={0x9B, 0x52, 0x31}},
     c    = {sy='', cl={0x66, 0x99, 0xD2}},
     h    = {sy='', cl={0x66, 0x99, 0xD2}},
@@ -18,7 +19,7 @@ local types = {
     nix  = {sy = '', cl={0x5B, 0xa2, 0xf1}},
     so   = {sy = '', cl={0xf1, 0x91, 0x11}},
     o    = {sy = '', cl={0xf1, 0x91, 0x11}},
-    py   = {sy = '', cl={0xff, 0xbf, 0x11}}
+    py   = {sy = '', cl={0xff, 0xbf, 0x11}},
 }
 local function parse_env(var)
     local result = {}
@@ -28,12 +29,12 @@ local function parse_env(var)
     return result
 end
 
-local data_dirs = parse_env bash 'echo $XDG_DATA_DIRS'
-local conf_dirs = parse_env bash 'echo $XDG_CONFIG_DIRS'
+local data_dirs = parse_env(bash 'echo $XDG_DATA_DIRS')
+local conf_dirs = parse_env(bash 'echo $XDG_CONFIG_DIRS')
 
 local home = bash 'echo $HOME'
 home = string.sub(home, 1, string.len(home) - 1)
-local special = {
+local special_path = {
     [home]                 = {sy = '󱂵'},
     [home .. '/Documents'] = {sy = '󱧶'},
     [home .. '/Pictures' ] = {sy = '󰉏'},
@@ -42,6 +43,10 @@ local special = {
     [home .. '/Music'    ] = {sy = '󱍙'},
     [home .. '/Desktop'  ] = {sy = ''},
 }
+
+for _, dir in ipairs(conf_dirs) do
+    special_path[dir] = {sy = ''}
+end
 
 local function into_cells(s, col)
     if not col then
@@ -73,12 +78,14 @@ local formats = {
         function (name, _, _)
             local fmt = {}
             local str = '󰈔 ' .. name
-            if string.sub(name, 1,1) == '.' then
-                fmt = into_cells(str, {0x99, 0x99, 0x99})
+            if name == '.gitignore' then
+                fmt = into_cells(' ' .. name, {0x99, 0x99, 0x99})
+                fmt[1].col = {0xaB, 0x52, 0x31}
             elseif string.lower(name) == 'make' or string.lower(name) == 'makefile' then
-                str = ' ' .. name
-                fmt = into_cells(str)
+                fmt = into_cells(' ' .. name)
                 fmt[1].col = {0xaa, 0x33, 0x11}
+            elseif string.sub(name, 1,1) == '.' then
+                fmt = into_cells(str, {0x99, 0x99, 0x99})
             else
                 fmt = into_cells(str)
             end
@@ -88,7 +95,7 @@ local formats = {
     },
     dirs = {
         function (name, path, _)
-            local sp = special[path]
+            local sp = special_path[path]
             if sp ~= nil then
                 local fmt = into_cells(sp.sy .. ' ' .. name .. '/')
                 if sp.col then
@@ -99,11 +106,19 @@ local formats = {
                 return fmt
             end
 
+            if name == '.git' then
+                local fmt = into_cells(' ' .. name .. '/', {0x99, 0x99, 0x99})
+                fmt[1].col = {0xaB, 0x52, 0x31}
+                return fmt
+            end
+
             local str = ' ' .. name .. '/'
-            local fmt = into_cells(str)
+            local fmt = {}
             if string.sub(name, 1,1) == '.' then
+                fmt = into_cells(str, {0x99, 0x99, 0x99})
                 fmt[1].col = {0x55, 0x55, 0x99}
             else
+                fmt = into_cells(str)
                 fmt[1].col = {0x77, 0x77, 0xff}
             end
 
