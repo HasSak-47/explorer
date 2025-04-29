@@ -51,16 +51,6 @@ fn config_dir() -> PathBuf {
     return config_dir;
 }
 
-#[allow(dead_code)]
-fn curr_dir() -> PathBuf {
-    use std::env::current_dir;
-    return match current_dir(){
-        Ok(s) => s,
-        Err(_) => {
-            exit(-1);
-        },
-    };
-}
 
 #[derive(Parser)]
 enum Mode{
@@ -73,9 +63,6 @@ enum Mode{
 pub struct Options {
     #[arg(long, short, default_value = config_dir().display().to_string())]
     config: PathBuf,
-
-    #[arg(default_value = curr_dir().display().to_string())]
-    path: PathBuf,
 
     #[arg(long, short, default_value_t=false)]
     debug: bool,
