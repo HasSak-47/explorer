@@ -1,9 +1,20 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, fmt::Display, path::PathBuf, process::exit };
 
 use crate::{get_options, util::*};
 
 use anyhow::Result;
 use clap::Parser;
+
+#[allow(dead_code)]
+fn curr_dir() -> Vec<PathBuf> {
+    use std::env::current_dir;
+    return match current_dir(){
+        Ok(s) => vec![s],
+        Err(_) => {
+            exit(-1);
+        },
+    };
+}
 
 #[derive(Debug, Parser, Clone)]
 pub struct List{
@@ -18,6 +29,9 @@ pub struct List{
 
     #[arg(long, default_value_t=false)]
     hidden: bool,
+
+    #[arg(default_values_os_t = curr_dir())]
+    paths: Vec<PathBuf>,
 }
 
 fn sort_name(a: &Entry, b: &Entry) -> std::cmp::Ordering{
@@ -37,6 +51,22 @@ fn sort_type(a: &Entry, b: &Entry) -> std::cmp::Ordering{
 }
 
 impl List{
+
+    fn get_formats(&self, path: &PathBuf) -> Result<Vec<Format>>{
+        let mut entries = read_dir(&path, self.hidden, self.recursive)?;
+        match &self.sort_by{
+            SortBy::Name => entries.sort_by(sort_name),
+            SortBy::Type => entries.sort_by(sort_type),
+        }
+
+        let mut v = Vec::new();
+        for entry in entries{
+            v.push(Format::try_from(entry)?);
+        }
+
+        return Ok(v);
+    }
+
     pub fn ls(&self) -> Result<()>{
         let list = self.list == true || self.recursive > 0;
         if get_options().debug {
@@ -46,16 +76,10 @@ impl List{
             
         }
 
-        let path = &get_options().path;
-        let mut entries = read_dir(path, self.hidden, self.recursive)?;
-        match &self.sort_by{
-            SortBy::Name => entries.sort_by(sort_name),
-            SortBy::Type => entries.sort_by(sort_type),
-        }
-
         let mut v = Vec::new();
-        for entry in entries{
-            v.push(Format::try_from(entry)?);
+        for path in &self.paths{
+            let mut other = self.get_formats(&path)?;
+            v.append(&mut other);
         }
 
         if list{
