@@ -5,6 +5,7 @@ mod explorer;
 mod api;
 
 use api::{get_formats, bash};
+use explorer::Explorer;
 use list::List;
 use util::*;
 
@@ -112,7 +113,7 @@ fn main() -> Result<()> {
     init_lua()?;
     match &get_options().mode{
         Mode::List(ls) => ls.ls()?,//print_data()? ,
-        Mode::Explorer => {},
+        Mode::Explorer => {Explorer::new().render()},
     }
 
     Ok(())

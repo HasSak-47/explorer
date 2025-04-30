@@ -86,7 +86,6 @@ pub fn process_path(path: PathBuf, hidden: bool, depth: u64) -> Result<Entry>{
     let mut childs = Vec::new();
     let ty = if path.is_dir() {
         if depth > 0 {
-            println!("childs!");
             childs = read_dir(&path, hidden, depth - 1)?;
         }
         EntryType::Dir
