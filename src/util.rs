@@ -1,5 +1,5 @@
 use std::{
-    fmt::Display, fs::DirEntry, os::unix::fs::MetadataExt, path::PathBuf, time::{Duration, SystemTime, UNIX_EPOCH}
+    env::current_dir, fmt::Display, fs::DirEntry, os::unix::fs::MetadataExt, path::PathBuf, time::{Duration, SystemTime, UNIX_EPOCH}
 };
 
 use anyhow::{anyhow, Result};
@@ -63,12 +63,16 @@ pub struct Entry{
     pub childs: Vec<Entry>,
 }
 
-fn process_entry(entry : std::io::Result<DirEntry>, hidden: bool, depth: u64) -> Result<Entry>{
-    let entry = entry?;
-    let path = entry.path();
+pub fn process_path(path: PathBuf, hidden: bool, depth: u64) -> Result<Entry>{
+    let path = if path.is_relative() {
+        let mut cwd = current_dir()?;
+        cwd.extend(&path);
+
+        cwd
+    }else{ path };
     let name = path.file_name().unwrap().to_str().unwrap().to_string();
 
-    // WARN: NOT A GOOD
+    // WARN: PROBABLY NOT A GOOD IDEA TO DO IT LIKE THIS
     if name.chars().next().ok_or(anyhow!("no first char?"))? == '.' && !hidden{
         return Err(anyhow!("error to ignore :)"));
     }
@@ -82,6 +86,7 @@ fn process_entry(entry : std::io::Result<DirEntry>, hidden: bool, depth: u64) ->
     let mut childs = Vec::new();
     let ty = if path.is_dir() {
         if depth > 0 {
+            println!("childs!");
             childs = read_dir(&path, hidden, depth - 1)?;
         }
         EntryType::Dir
@@ -91,11 +96,14 @@ fn process_entry(entry : std::io::Result<DirEntry>, hidden: bool, depth: u64) ->
     }
     else{
         EntryType::File
-    } ;
-
-
+    };
 
     Ok(Entry{ name, path, size, date, ty, childs })
+}
+
+fn process_entry(entry : std::io::Result<DirEntry>, hidden: bool, depth: u64) -> Result<Entry>{
+    let entry = entry?;
+    return process_path(entry.path(), hidden, depth);
 }
 
 pub fn read_dir(path: &PathBuf, hidden: bool, depth: u64) -> Result<Vec<Entry>>{
