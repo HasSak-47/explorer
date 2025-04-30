@@ -113,7 +113,7 @@ fn main() -> Result<()> {
     init_lua()?;
     match &get_options().mode{
         Mode::List(ls) => ls.ls()?,//print_data()? ,
-        Mode::Explorer => {Explorer::new().render()},
+        Mode::Explorer => Explorer::new().render()?,
     }
 
     Ok(())

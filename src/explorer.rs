@@ -14,7 +14,7 @@ pub struct Explorer{
 impl tui::widgets::Widget for &Format{
     fn render(self, area: tui::layout::Rect, buf: &mut tui::buffer::Buffer) {
         for i in 0..min(area.width , self.v.len() as u16) {
-            let cell = buf.get_mut(i, 0);
+            let cell = buf.get_mut(area.x + i, area.y);
             let val = &self.v[i as usize];
             cell.set_char(val.chr);
             cell.set_fg(Color::Rgb(val.col.0, val.col.1, val.col.2));
@@ -26,7 +26,7 @@ impl tui::widgets::Widget for &Explorer{
     fn render(self, area: tui::layout::Rect, buf: &mut tui::buffer::Buffer) {
         for i in 0..min(area.height , self.cache.len() as u16) {
             let val = &self.cache[i as usize];
-            val.render(Rect::new(area.x, area.y + 1, area.width, 1), buf);
+            val.render(Rect::new(area.x, area.y + i, area.width, 1), buf);
         }
     }
 }
@@ -60,7 +60,7 @@ fn render(ex: Explorer) -> Result<()>{
         f.render_widget(&ex, size);
     })?;
 
-    thread::sleep(Duration::from_millis(5000));
+    thread::sleep(Duration::from_millis(1000));
 
     // restore terminal
     disable_raw_mode()?;
