@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::Display, path::PathBuf, process::exit };
+use std::{cmp::Ordering, path::PathBuf, process::exit };
 
 use crate::{get_options, util::*};
 
@@ -68,7 +68,7 @@ impl List{
     }
 
     pub fn ls(&self) -> Result<()>{
-        let list = self.list == true || self.recursive > 0;
+        let list = self.list == true || self.recursive > 0 || self.paths.len() > 0;
         if get_options().debug {
             println!("rec: {}", self.recursive);
             println!("list: {}", self.list);
@@ -77,9 +77,19 @@ impl List{
         }
 
         let mut v = Vec::new();
-        for path in &self.paths{
-            let mut other = self.get_formats(&path)?;
-            v.append(&mut other);
+        if self.paths.len() > 1 {
+            for path in &self.paths{
+                match process_path(path.clone(), self.hidden, 0) {
+                    Ok(k) => {
+                        let root = Format::try_from(process_path(k.path.clone(), self.hidden, self.recursive + 1)?)?;
+                        v.push(root);
+                    },
+                    _ => {},
+                }
+            }
+        }
+        else{
+            v = self.get_formats(&self.paths[0])?;
         }
 
         if list{
@@ -89,12 +99,8 @@ impl List{
         }
         else{
             let (cols, _rows) = crossterm::terminal::size()?;
-            let max = v.iter().map(|f| f.v.len()).max().unwrap() + 1;
-            if get_options().debug {
-                println!("max: {max}");
-            }
-
             let mut current = 0;
+            let max = v.iter().map(|f| f.v.len()).max().unwrap() + 1;
             let cap = cols as usize / max;
             for e in v{
                 if current >= cap{
