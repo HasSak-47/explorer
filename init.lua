@@ -95,6 +95,10 @@ local formats = {
     },
     dirs = {
         function (name, path, _)
+            local has_git = bash('ls ' .. path .. ' | grep git')
+            if has_git then
+                print('git!')
+            end
             local sp = special_path[path]
             if sp ~= nil then
                 local fmt = into_cells(sp.sy .. ' ' .. name .. '/')
