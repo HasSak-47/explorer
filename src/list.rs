@@ -17,24 +17,24 @@ fn curr_dir() -> Vec<PathBuf> {
 }
 
 #[derive(Debug, Parser, Clone)]
-pub struct List{
+pub struct List {
     #[arg(value_enum, long, short, default_value_t=SortBy::Name)]
     sort_by: SortBy,
 
-    #[arg(long, short, default_value_t=0)]
+    #[arg(long, short, default_value_t = 0)]
     recursive: u64,
 
-    #[arg(long, short, default_value_t=false)]
+    #[arg(long, short, default_value_t = false)]
     list: bool,
 
-    #[arg(long, default_value_t=false)]
+    #[arg(long, default_value_t = false)]
     hidden: bool,
 
     #[arg(default_values_os_t = curr_dir())]
     paths: Vec<PathBuf>,
 }
 
-fn sort_name(a: &Entry, b: &Entry) -> std::cmp::Ordering{
+fn sort_name(a: &Entry, b: &Entry) -> std::cmp::Ordering {
     let v = a.name.to_lowercase().cmp(&b.name.to_lowercase());
     if let Ordering::Equal = v {
         return a.ty.cmp(&b.ty);
@@ -42,7 +42,7 @@ fn sort_name(a: &Entry, b: &Entry) -> std::cmp::Ordering{
     return v;
 }
 
-fn sort_type(a: &Entry, b: &Entry) -> std::cmp::Ordering{
+fn sort_type(a: &Entry, b: &Entry) -> std::cmp::Ordering {
     let v = a.ty.cmp(&b.ty);
     if let Ordering::Equal = v {
         return a.name.to_lowercase().cmp(&b.name.to_lowercase());
@@ -60,7 +60,7 @@ impl List{
         }
 
         let mut v = Vec::new();
-        for entry in entries{
+        for entry in entries {
             v.push(Format::try_from(entry)?);
         }
 
@@ -96,14 +96,13 @@ impl List{
             for e in v{
                 print!("{e:#}");
             }
-        }
-        else{
+        } else {
             let (cols, _rows) = crossterm::terminal::size()?;
             let mut current = 0;
             let max = v.iter().map(|f| f.v.len()).max().unwrap() + 1;
             let cap = cols as usize / max;
-            for e in v{
-                if current >= cap{
+            for e in v {
+                if current >= cap {
                     current = 0;
                     println!();
                 }
@@ -112,7 +111,6 @@ impl List{
                 current += 1;
             }
             println!();
-
         }
 
         return Ok(());
