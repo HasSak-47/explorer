@@ -28,7 +28,7 @@ pub struct List {
     list: bool,
 
     #[arg(long, default_value_t = false)]
-    hidden: bool,
+    all: bool,
 
     #[arg(default_values_os_t = curr_dir())]
     paths: Vec<PathBuf>,
@@ -51,9 +51,8 @@ fn sort_type(a: &Entry, b: &Entry) -> std::cmp::Ordering {
 }
 
 impl List{
-
     fn get_formats(&self, path: &PathBuf) -> Result<Vec<Format>>{
-        let mut entries = read_dir(&path, self.hidden, self.recursive)?;
+        let mut entries = read_dir(&path, self.all, self.recursive)?;
         match &self.sort_by{
             SortBy::Name => entries.sort_by(sort_name),
             SortBy::Type => entries.sort_by(sort_type),
@@ -68,20 +67,22 @@ impl List{
     }
 
     pub fn ls(&self) -> Result<()>{
-        let list = self.list == true || self.recursive > 0 || self.paths.len() > 0;
+        println!("self: {self:?}");
+        let list = self.list == true || self.recursive > 0 || self.paths.len() > 1;
         if get_options().debug {
+            println!("len: {}", self.paths.len());
             println!("rec: {}", self.recursive);
             println!("list: {}", self.list);
-            println!("flist: {}", list);
+            println!("is list: {}", list);
             
         }
 
         let mut v = Vec::new();
         if self.paths.len() > 1 {
             for path in &self.paths{
-                match process_path(path.clone(), self.hidden, 0) {
+                match process_path(path.clone(), self.all, 0) {
                     Ok(k) => {
-                        let root = Format::try_from(process_path(k.path.clone(), self.hidden, self.recursive + 1)?)?;
+                        let root = Format::try_from(process_path(k.path.clone(), self.all, self.recursive + 1)?)?;
                         v.push(root);
                     },
                     _ => {},
@@ -92,6 +93,7 @@ impl List{
             v = self.get_formats(&self.paths[0])?;
         }
 
+        print!("{}", Color::WHITE);
         if list{
             for e in v{
                 print!("{e:#}");

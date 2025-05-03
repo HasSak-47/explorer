@@ -133,7 +133,7 @@ fn setup_lua() {
 }
 
 fn main() -> Result<()> {
-    println!("\x1b[m");
+    print!("\x1b[m");
     OPTIONS.get_or_init(Options::parse);
 
     setup_lua();
