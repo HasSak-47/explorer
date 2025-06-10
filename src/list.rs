@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, path::PathBuf, process::exit };
+use std::{cmp::Ordering, path::PathBuf, process::exit};
 
 use crate::{get_options, util::*};
 
@@ -8,11 +8,11 @@ use clap::Parser;
 #[allow(dead_code)]
 fn curr_dir() -> Vec<PathBuf> {
     use std::env::current_dir;
-    return match current_dir(){
+    return match current_dir() {
         Ok(s) => vec![s],
         Err(_) => {
             exit(-1);
-        },
+        }
     };
 }
 
@@ -50,10 +50,10 @@ fn sort_type(a: &Entry, b: &Entry) -> std::cmp::Ordering {
     return v;
 }
 
-impl List{
-    fn get_formats(&self, path: &PathBuf) -> Result<Vec<Format>>{
+impl List {
+    fn get_formats(&self, path: &PathBuf) -> Result<Vec<Format>> {
         let mut entries = read_dir(&path, self.all, self.recursive)?;
-        match &self.sort_by{
+        match &self.sort_by {
             SortBy::Name => entries.sort_by(sort_name),
             SortBy::Type => entries.sort_by(sort_type),
         }
@@ -66,36 +66,37 @@ impl List{
         return Ok(v);
     }
 
-    pub fn ls(&self) -> Result<()>{
-        println!("self: {self:?}");
+    pub fn ls(&self) -> Result<()> {
         let list = self.list == true || self.recursive > 0 || self.paths.len() > 1;
         if get_options().debug {
             println!("len: {}", self.paths.len());
             println!("rec: {}", self.recursive);
             println!("list: {}", self.list);
             println!("is list: {}", list);
-            
         }
 
         let mut v = Vec::new();
         if self.paths.len() > 1 {
-            for path in &self.paths{
+            for path in &self.paths {
                 match process_path(path.clone(), self.all, 0) {
                     Ok(k) => {
-                        let root = Format::try_from(process_path(k.path.clone(), self.all, self.recursive + 1)?)?;
+                        let root = Format::try_from(process_path(
+                            k.path.clone(),
+                            self.all,
+                            self.recursive + 1,
+                        )?)?;
                         v.push(root);
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
-        }
-        else{
+        } else {
             v = self.get_formats(&self.paths[0])?;
         }
 
-        print!("{}", Color::WHITE);
-        if list{
-            for e in v{
+        print!("\x1b[m");
+        if list {
+            for e in v {
                 print!("{e:#}");
             }
         } else {
