@@ -5,12 +5,15 @@ mod list;
 mod util;
 
 use api::{bash, get_formats};
+use explorer::Explorer;
 use list::List;
 use util::*;
 
+#[allow(deprecated)]
+use std:: env::home_dir;
+
 use std::{
     collections::HashMap,
-    env::home_dir,
     fs::File,
     io::Read,
     path::PathBuf,
@@ -50,6 +53,7 @@ pub static LUA: LazyLock<Mutex<Lua>> = LazyLock::new(|| Mutex::new(Lua::new()));
 
 #[allow(dead_code)]
 fn config_dir() -> PathBuf {
+    #[allow(deprecated)]
     let mut config_dir = match home_dir() {
         Some(s) => s,
         None => {
@@ -140,7 +144,7 @@ fn main() -> Result<()> {
     init_lua()?;
     match &get_options().mode {
         Mode::List(ls) => ls.ls()?, //print_data()? ,
-        Mode::Explorer => {}
+        Mode::Explorer => { Explorer::new().render()?; }
     }
 
     Ok(())
