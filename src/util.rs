@@ -1,5 +1,10 @@
 use std::{
-    env::current_dir, fmt::Display, fs::DirEntry, os::unix::fs::MetadataExt, path::PathBuf, time::{Duration, SystemTime, UNIX_EPOCH}
+    env::current_dir,
+    fmt::Display,
+    fs::DirEntry,
+    os::unix::fs::MetadataExt,
+    path::PathBuf,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{Result, anyhow};
@@ -10,7 +15,7 @@ use crate::fmt::{format_dir, format_file, format_link};
 
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 #[repr(u8)]
-pub enum Color{
+pub enum Color {
     BLACK = 30,
     RED = 31,
     GREEN = 32,
@@ -21,40 +26,46 @@ pub enum Color{
     #[default]
     WHITE = 37,
 
-    RGB(u8, u8, u8)
+    RGB(u8, u8, u8),
 }
 
 impl FromLua for Color {
     fn from_lua(value: mlua::Value, _: &mlua::Lua) -> mlua::Result<Self> {
         match value {
             mlua::Value::Table(t) => {
-                let r : u8 = t.get(1)?;
-                let g : u8 = t.get(2)?;
-                let b : u8 = t.get(3)?;
+                let r: u8 = t.get(1)?;
+                let g: u8 = t.get(2)?;
+                let b: u8 = t.get(3)?;
 
                 return Ok(Color::RGB(r, g, b));
             }
             mlua::Value::String(s) => {
                 return Ok(match s.to_string_lossy().as_str() {
-                    "BLACK"   | "black"   => Color::BLACK,
-                    "RED"     | "red"     => Color::RED,
-                    "GREEN"   | "green"   => Color::GREEN,
-                    "YELLOW"  | "yellow"  => Color::YELLOW,
-                    "BLUE"    | "blue"    => Color::BLUE,
+                    "BLACK" | "black" => Color::BLACK,
+                    "RED" | "red" => Color::RED,
+                    "GREEN" | "green" => Color::GREEN,
+                    "YELLOW" | "yellow" => Color::YELLOW,
+                    "BLUE" | "blue" => Color::BLUE,
                     "MAGENTA" | "magenta" => Color::MAGENTA,
-                    "CYAN"    | "cyan"    => Color::CYAN,
-                    "WHITE"   | "white"   => Color::WHITE,
-                    _ => return Err(mlua::Error::FromLuaConversionError { from: "mlua::Value", to: "Color".to_string(), message: Some("not a valid name".to_string()) })
+                    "CYAN" | "cyan" => Color::CYAN,
+                    "WHITE" | "white" => Color::WHITE,
+                    _ => {
+                        return Err(mlua::Error::FromLuaConversionError {
+                            from: "mlua::Value",
+                            to: "Color".to_string(),
+                            message: Some("not a valid name".to_string()),
+                        });
+                    }
                 });
-            },
+            }
             _ => {
                 let v = value.to_string()?;
                 return Err(mlua::Error::FromLuaConversionError {
                     from: "mlua::Value",
                     to: "Color".to_string(),
-                    message: Some(format!("\"{v}\" is not valid value"))
+                    message: Some(format!("\"{v}\" is not valid value")),
                 });
-            },
+            }
         }
     }
 }
@@ -113,17 +124,19 @@ pub struct Entry {
     pub childs: Vec<Entry>,
 }
 
-pub fn process_path(path: PathBuf, hidden: bool, depth: u64) -> Result<Entry>{
+pub fn process_path(path: PathBuf, hidden: bool, depth: u64) -> Result<Entry> {
     let path = if path.is_relative() {
         let mut cwd = current_dir()?;
         cwd.extend(&path);
 
         cwd
-    }else{ path };
+    } else {
+        path
+    };
     let name = path.file_name().unwrap().to_str().unwrap().to_string();
 
     // WARN: PROBABLY NOT A GOOD IDEA TO DO IT LIKE THIS
-    if name.chars().next().ok_or(anyhow!("no first char?"))? == '.' && !hidden{
+    if name.chars().next().ok_or(anyhow!("no first char?"))? == '.' && !hidden {
         return Err(anyhow!("error to ignore :)"));
     }
 
@@ -144,15 +157,22 @@ pub fn process_path(path: PathBuf, hidden: bool, depth: u64) -> Result<Entry>{
         EntryType::File
     };
 
-    Ok(Entry{ name, path, size, date, ty, childs })
+    Ok(Entry {
+        name,
+        path,
+        size,
+        date,
+        ty,
+        childs,
+    })
 }
 
-fn process_entry(entry : std::io::Result<DirEntry>, hidden: bool, depth: u64) -> Result<Entry>{
+fn process_entry(entry: std::io::Result<DirEntry>, hidden: bool, depth: u64) -> Result<Entry> {
     let entry = entry?;
     return process_path(entry.path(), hidden, depth);
 }
 
-pub fn read_dir(path: &PathBuf, hidden: bool, depth: u64) -> Result<Vec<Entry>>{
+pub fn read_dir(path: &PathBuf, hidden: bool, depth: u64) -> Result<Vec<Entry>> {
     let mut v = Vec::new();
     let dir = std::fs::read_dir(path)?;
 
@@ -205,7 +225,7 @@ impl FromLua for Format {
 
                     let chr: String = val.get("chr")?;
                     let chr = chr.chars().into_iter().next().ok_or(anyhow!("no char?"))?;
-                    let col : Color = val.get("col")?;
+                    let col: Color = val.get("col")?;
                     v.push(Cell { chr, col })
                 }
 
@@ -213,10 +233,13 @@ impl FromLua for Format {
                     v,
                     childs: Vec::new(),
                 });
-
-            },
+            }
             _ => {
-                return Err(mlua::Error::FromLuaConversionError { from: "any", to: "Format".to_string(), message: Some("idk man".to_string()) });
+                return Err(mlua::Error::FromLuaConversionError {
+                    from: "any",
+                    to: "Format".to_string(),
+                    message: Some("idk man".to_string()),
+                });
             }
         }
     }
@@ -256,9 +279,9 @@ fn rec_format_format(
     return Ok(());
 }
 
-impl Display for Color{
+impl Display for Color {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self{
+        match self {
             Self::BLACK => write!(f, "\x1b[30m")?,
             Self::RED => write!(f, "\x1b[31m")?,
             Self::GREEN => write!(f, "\x1b[32m")?,
@@ -267,7 +290,7 @@ impl Display for Color{
             Self::MAGENTA => write!(f, "\x1b[35m")?,
             Self::CYAN => write!(f, "\x1b[36m")?,
             Self::WHITE => write!(f, "\x1b[37m")?,
-            Self::RGB(r,g,b)=> write!(f, "\x1b[38;2;{r};{g};{b}m")?
+            Self::RGB(r, g, b) => write!(f, "\x1b[38;2;{r};{g};{b}m")?,
         }
 
         Ok(())

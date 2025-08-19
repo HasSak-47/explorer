@@ -10,7 +10,7 @@ use list::List;
 use util::*;
 
 #[allow(deprecated)]
-use std:: env::home_dir;
+use std::env::home_dir;
 
 use std::{
     collections::HashMap,
@@ -21,7 +21,7 @@ use std::{
     sync::{LazyLock, Mutex, OnceLock},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::Parser;
 use mlua::{Function, Lua};
 
@@ -144,7 +144,9 @@ fn main() -> Result<()> {
     init_lua()?;
     match &get_options().mode {
         Mode::List(ls) => ls.ls()?, //print_data()? ,
-        Mode::Explorer => { Explorer::new().render()?; }
+        Mode::Explorer => {
+            Explorer::new().render()?;
+        }
     }
 
     Ok(())
